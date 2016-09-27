@@ -146,12 +146,15 @@ int copyfile(int fdin, void *out, int nbytes, unsigned long *offs,
 
 	if (IsValidHash(hash)) {
 		dgst = swupdate_HASH_init();
+        TRACE("Invalid hash");
 		if (!dgst)
 			return -EFAULT;
 	}
 
 	if (checksum)
 		*checksum = 0;
+
+    TRACE("Checksum = %d", *checksum);
 
 	/*
 	 * Simultaneous compression and decryption of images
@@ -164,11 +167,15 @@ int copyfile(int fdin, void *out, int nbytes, unsigned long *offs,
 
 	in = (unsigned char *)malloc(BUFF_SIZE);
 	if (!in)
+    {
+        TRACE("Could not allocate enough memory for buffer (%lu)", BUFF_SIZE);
 		return -ENOMEM;
+    }
 
 	if (encrypted) {
 		decbuf = (unsigned char *)calloc(1, BUFF_SIZE + AES_BLOCK_SIZE);
 		if (!decbuf) {
+            TRACE("Could not allocate enough memory for encryption buffer (%lu)", BUFF_SIZE);
 			ret = -ENOMEM;
 			goto copyfile_exit;
 		}
@@ -177,6 +184,7 @@ int copyfile(int fdin, void *out, int nbytes, unsigned long *offs,
 		ivt = get_aes_ivt();
 		dcrypt = swupdate_DECRYPT_init(aes_key, ivt);
 		if (!dcrypt) {
+            TRACE("Error decrypting block");
 			ret = -EFAULT;
 			goto copyfile_exit;
 		}
@@ -184,6 +192,7 @@ int copyfile(int fdin, void *out, int nbytes, unsigned long *offs,
 
 #ifdef CONFIG_GUNZIP
 	if (compressed) {
+        TRACE("Uncompressing image");
 		ret = decompress_image(fdin, offs, nbytes, fdout, checksum, dgst);
 		if (ret < 0) {
 			ERROR("gunzip failure %d (errno %d) -- aborting\n", ret, errno);
@@ -197,6 +206,7 @@ int copyfile(int fdin, void *out, int nbytes, unsigned long *offs,
 		size = (nbytes < BUFF_SIZE ? nbytes : BUFF_SIZE);
 
 		if ((ret = fill_buffer(fdin, in, size, offs, checksum, dgst) < 0)) {
+            TRACE("Finished copying");
 			goto copyfile_exit;
 		}
 
@@ -222,6 +232,7 @@ int copyfile(int fdin, void *out, int nbytes, unsigned long *offs,
 		 * to remove it
 		 */
 		if (callback(out, inbuf, len) < 0) {
+            TRACE("Error calling callback at %d", __LINE__);
 			ret =-ENOSPC;
 			goto copyfile_exit;
 		}
@@ -246,6 +257,7 @@ int copyfile(int fdin, void *out, int nbytes, unsigned long *offs,
 		if (ret < 0)
 			goto copyfile_exit;
 		if (callback(out, decbuf, len) < 0) {
+            TRACE("Error calling callback at %d", __LINE__);
 			ret =-ENOSPC;
 			goto copyfile_exit;
 		}
