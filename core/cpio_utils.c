@@ -146,9 +146,11 @@ int copyfile(int fdin, void *out, int nbytes, unsigned long *offs,
 
 	if (IsValidHash(hash)) {
 		dgst = swupdate_HASH_init();
-        TRACE("Invalid hash");
 		if (!dgst)
+        {
+            TRACE("Invalid hash");
 			return -EFAULT;
+        }
 	}
 
 	if (checksum)
