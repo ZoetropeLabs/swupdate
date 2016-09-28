@@ -56,7 +56,7 @@ static int modify_uboot_script(struct img_type *img,
 		close(fdout);
 	}
 
-	if (!strlen(img->path))
+	if (strlen(img->path) == 0)
     {
         ret = -1;
         ERROR("Need to specify path of existing U-Boot script");

@@ -43,53 +43,77 @@
 static void sw_append_stream(struct img_type *img, const char *key,
 	       const char *value)
 {
+    TRACE("Parsing '%s = %s'", key, value);
 
 	if (!strcmp(key, "type"))
-		strncpy(img->type, value,
-			sizeof(img->type));
-	if (!strcmp(key, "filename")) {
-		strncpy(img->fname, value,
-			sizeof(img->fname));
+    {
+		strncpy(img->type, value, sizeof(img->type));
+    }
+	else if (!strcmp(key, "filename"))
+    {
+		strncpy(img->fname, value, sizeof(img->fname));
 		img->required = 1;
 	}
-	if (!strcmp(key, "name")) {
-		strncpy(img->id.name, value,
-			sizeof(img->id.name));
+	else if (!strcmp(key, "name"))
+    {
+		strncpy(img->id.name, value, sizeof(img->id.name));
 	}
-	if (!strcmp(key, "version")) {
-		strncpy(img->id.version, value,
-			sizeof(img->id.version));
+	else if (!strcmp(key, "version"))
+    {
+		strncpy(img->id.version, value, sizeof(img->id.version));
 	}
-	if (!strcmp(key, "mtdname") || !strcmp(key, "dest"))
-		strncpy(img->path, value,
-			sizeof(img->path));
-	if (!strcmp(key, "filesystem"))
-		strncpy(img->filesystem, value,
-			sizeof(img->filesystem));
-	if (!strcmp(key, "volume"))
-		strncpy(img->volname, value,
-			sizeof(img->volname));
-	if (!strcmp(key, "device_id"))
-		strncpy(img->device, value,
-			sizeof(img->device));
-	if (!strcmp(key, "device"))
-		strncpy(img->device, value,
-			sizeof(img->device));
-	if (!strcmp(key, "script"))
+	else if (!strcmp(key, "mtdname") || !strcmp(key, "dest"))
+    {
+		strncpy(img->path, value, sizeof(img->path));
+	}
+	else if (!strcmp(key, "filesystem"))
+    {
+		strncpy(img->filesystem, value, sizeof(img->filesystem));
+	}
+	else if (!strcmp(key, "volume"))
+    {
+		strncpy(img->volname, value, sizeof(img->volname));
+	}
+	else if (!strcmp(key, "device_id"))
+    {
+		strncpy(img->device, value, sizeof(img->device));
+	}
+	else if (!strcmp(key, "device"))
+    {
+		strncpy(img->device, value, sizeof(img->device));
+	}
+	else if (!strcmp(key, "script"))
+    {
 		img->is_script = 1;
-	if (!strcmp(key, "path"))
-		strncpy(img->path, value,
-			sizeof(img->path));
-	if (!strcmp(key, "sha256"))
+	}
+	else if (!strcmp(key, "path"))
+    {
+		strncpy(img->path, value, sizeof(img->path));
+	}
+	else if (!strcmp(key, "sha256"))
+    {
 		ascii_to_hash(img->sha256, value);
-	if (!strcmp(key, "encrypted"))
+	}
+	else if (!strcmp(key, "encrypted"))
+    {
 		img->is_encrypted = 1;
-	if (!strcmp(key, "compressed"))
+	}
+	else if (!strcmp(key, "compressed"))
+    {
 		img->compressed = 1;
-	if (!strcmp(key, "installed-directly"))
+	}
+	else if (!strcmp(key, "installed-directly"))
+    {
 		img->install_directly = 1;
-	if (!strcmp(key, "install-if-different"))
+	}
+	else if (!strcmp(key, "install-if-different"))
+    {
 		img->id.install_if_different = 1;
+    }
+    else
+    {
+        ERROR("Unrecognised key %s", key);
+    }
 }
 
 int parse_external(struct swupdate_cfg *software, const char *filename)
