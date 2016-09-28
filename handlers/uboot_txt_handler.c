@@ -29,7 +29,8 @@
 #include "util.h"
 
 #define INI_ANSIONLY
-#include "minini/minGlue.h"
+#include "minini/minGlue-stdio.h"
+#include "minini/minIni.h"
 
 static void uboot_txt_handler(void);
 
@@ -63,7 +64,6 @@ static int modify_uboot_script(struct img_type *img,
     else
     {
         // no sections
-        int section_idx = NULL;
         char * section = NULL;
 
         int key_idx;
@@ -72,7 +72,7 @@ static int modify_uboot_script(struct img_type *img,
 
         int n_read;
 
-        for (key_idx = 0; init_getkey(section key_idx, key, sizeof(key), filename) > 0; key_idx++)
+        for (key_idx = 0; ini_getkey(section, key_idx, key, sizeof(key), filename) > 0; key_idx++)
         {
             n_read = ini_gets(section, key, "", value, 128, filename);
 
