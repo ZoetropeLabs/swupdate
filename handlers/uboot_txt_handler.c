@@ -29,7 +29,7 @@
 #include "util.h"
 
 #define INI_ANSIONLY
-#include "minini/minGlue-stdio.h"
+#include "minini/minGlue.h"
 #include "minini/minIni.h"
 
 static void uboot_txt_handler(void);
