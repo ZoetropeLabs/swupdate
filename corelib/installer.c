@@ -197,6 +197,9 @@ static int update_uboot_env(void)
 	ret = fw_parse_script((char *)UBOOT_SCRIPT, NULL);
 	if (ret < 0)
 		ERROR("Error updating U-Boot environment");
+#else
+    ret = -1;
+    ERROR("Modifying U-Boot environments is not supported - recompile with CONFIG_UBOOT");
 #endif
 	return ret;
 }
