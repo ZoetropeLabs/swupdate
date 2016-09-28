@@ -78,7 +78,10 @@ int parse(struct swupdate_cfg *sw, const char *descfile)
 		ret = current(sw, descfile);
 
 		if (ret == 0)
+        {
+            TRACE("Parsed with parser %d", i);
 			break;
+        }
 	}
 
 	if (ret != 0)
