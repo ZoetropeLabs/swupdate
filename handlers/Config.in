@@ -149,4 +149,11 @@ config UBOOT_FWENV
 	  where U-Boot environment is saved, that is, on which
 	  MTD device.
 
+config UBOOT_TXT
+    bool "uboot_txt"
+	default n
+	help
+	  Make it so that a boot script can be modified
+	  rather than a typical uboot environment.
+
 endmenu
