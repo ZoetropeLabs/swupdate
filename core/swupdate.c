@@ -648,11 +648,16 @@ int main(int argc, char **argv)
 	}
 
 	if (opt_d) {
+#ifdef CONFIG_DOWNLOAD
 		result = download_from_url(image_url, opt_r, opt_t);
 		if (result == SUCCESS)
 			exit(0);
 		else
 			exit(1);
+#else
+        ERROR("Downloading from a URL is not supported - recompile with CONFIG_DOWNLOAD")
+        exit(1);
+#endif
 	}
 
 	/* Start embedded web server */
