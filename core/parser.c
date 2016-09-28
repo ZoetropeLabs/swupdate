@@ -32,9 +32,9 @@
 #include "handler.h"
 
 static parser_fn parsers[] = {
-	parse_cfg,
+	parse_external,
 	parse_json,
-	parse_external
+	parse_cfg
 };
 
 #ifdef CONFIG_SIGNED_IMAGES
