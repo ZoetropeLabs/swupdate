@@ -35,6 +35,9 @@
 #include "channel_hawkbit.h"
 #include "suricatta/state.h"
 #include "server_hawkbit.h"
+#include "parselib.h"
+#include "swupdate_settings.h"
+#include "swupdate_dict.h"
 
 #define DEFAULT_POLLING_INTERVAL 45
 #define DEFAULT_RESUME_TRIES 5
@@ -54,6 +57,35 @@
 #define STATE_KEY "none"
 #endif
 
+#define SETSTRING(p, v) do { \
+	if (p) \
+		free(p); \
+	p = strdup(v); \
+} while (0)
+
+static struct option long_options[] = {
+    {"tenant", required_argument, NULL, 't'},
+    {"id", required_argument, NULL, 'i'},
+    {"confirm", required_argument, NULL, 'c'},
+    {"url", required_argument, NULL, 'u'},
+    {"polldelay", required_argument, NULL, 'p'},
+    {"nocheckcert", no_argument, NULL, 'x'},
+    {"retry", required_argument, NULL, 'r'},
+    {"retrywait", required_argument, NULL, 'w'},
+    {NULL, 0, NULL, 0}};
+
+static unsigned short mandatory_argument_count = 0;
+
+/*
+ * These are used to check if all mandatory fields
+ * are set
+ */
+#define TENANT_BIT	1
+#define ID_BIT		2
+#define URL_BIT		4
+#define ALL_MANDATORY_SET	(TENANT_BIT | ID_BIT | URL_BIT)
+
+
 /* Prototypes for "internal" functions */
 /* Note that they're not `static` so that they're callable from unit tests. */
 json_object *json_get_key(json_object *json_root, const char *key);
@@ -65,8 +97,9 @@ server_op_res_t server_handle_initial_state(update_state_t stateovrrd);
 int server_update_status_callback(ipc_message *msg);
 int server_update_done_callback(RECOVERY_STATUS status);
 server_op_res_t server_process_update_artifact(json_object *json_data_artifact);
-void server_print_help(void);
+void suricatta_print_help(void);
 server_op_res_t server_set_polling_interval(json_object *json_root);
+server_op_res_t server_set_config_data(json_object *json_root);
 server_op_res_t
 server_send_deployment_reply(const int action_id, const int job_cnt_max,
 			     const int job_cnt_cur, const char *finished,
@@ -88,8 +121,9 @@ static channel_data_t channel_data_defaults = {.debug = false,
 /* Prototypes for "public" functions */
 server_op_res_t server_has_pending_action(int *action_id);
 server_op_res_t server_stop(void);
-server_op_res_t server_start(int argc, char *argv[]);
+server_op_res_t server_start(char *fname, int argc, char *argv[]);
 server_op_res_t server_install_update(void);
+server_op_res_t server_send_target_data(void);
 unsigned int server_get_polling_interval(void);
 
 json_object *json_get_key(json_object *json_root, const char *key)
@@ -206,6 +240,7 @@ server_op_res_t server_send_cancel_reply(const int action_id)
 	}
 	channel_data_reply.url = url;
 	channel_data_reply.json_string = json_reply_string;
+	channel_data_reply.method = CHANNEL_POST;
 	result = map_channel_retcode(channel.put((void *)&channel_data_reply));
 
 cleanup:
@@ -280,6 +315,7 @@ server_send_deployment_reply(const int action_id, const int job_cnt_max,
 	channel_data.url = url;
 	channel_data.json_string = json_reply_string;
 	TRACE("PUTing to %s: %s\n", channel_data.url, channel_data.json_string);
+	channel_data.method = CHANNEL_POST;
 	result = map_channel_retcode(channel.put((void *)&channel_data));
 
 cleanup:
@@ -329,6 +365,23 @@ unsigned int server_get_polling_interval(void)
 	return server_hawkbit.polling_interval;
 }
 
+
+server_op_res_t server_set_config_data(json_object *json_root)
+{
+	char *tmp;
+
+	tmp = json_get_data_url(json_root, "configData");
+
+	if (tmp != NULL) {
+		if (server_hawkbit.configData_url)
+			free(server_hawkbit.configData_url);
+		server_hawkbit.configData_url = tmp;
+		server_hawkbit.has_to_send_configData = true;
+		TRACE("ConfigData: %s\n", server_hawkbit.configData_url);
+	}
+	return SERVER_OK;
+}
+
 static server_op_res_t server_get_device_info(channel_data_t *channel_data)
 {
 	assert(channel_data != NULL);
@@ -354,6 +407,12 @@ static server_op_res_t server_get_device_info(channel_data_t *channel_data)
 	    SERVER_OK) {
 		goto cleanup;
 	}
+
+	if ((result = server_set_config_data(channel_data->json_reply)) !=
+	    SERVER_OK) {
+		goto cleanup;
+	}
+
 cleanup:
 	if (channel_data->url != NULL) {
 		free(channel_data->url);
@@ -387,8 +446,13 @@ static server_op_res_t server_get_deployment_info(channel_data_t *channel_data,
 		channel_data->url = url_deployment_base;
 		TRACE("Update action available at %s\n", url_deployment_base);
 	} else {
-		TRACE("No pending action on server.\n");
-		result = SERVER_NO_UPDATE_AVAILABLE;
+		if (server_hawkbit.has_to_send_configData) {
+			result = SERVER_ID_REQUESTED;
+			TRACE("No pending action on server, send configData.\n");
+		} else {
+			TRACE("No pending action on server.\n");
+			result = SERVER_NO_UPDATE_AVAILABLE;
+		}
 		goto cleanup;
 	}
 	if ((result = map_channel_retcode(channel.get((void *)channel_data))) !=
@@ -425,6 +489,7 @@ cleanup:
 
 server_op_res_t server_has_pending_action(int *action_id)
 {
+
 	channel_data_t channel_data = channel_data_defaults;
 	server_op_res_t result =
 	    server_get_deployment_info(&channel_data, action_id);
@@ -494,6 +559,7 @@ server_op_res_t server_handle_initial_state(update_state_t stateovrrd)
 	    server_get_deployment_info(&channel_data, &action_id);
 	switch (result) {
 	case SERVER_OK:
+	case SERVER_ID_REQUESTED:
 	case SERVER_UPDATE_CANCELED:
 	case SERVER_NO_UPDATE_AVAILABLE:
 		DEBUG("No active update available, nothing to report to "
@@ -688,6 +754,7 @@ server_op_res_t server_install_update(void)
 	switch (result) {
 	case SERVER_UPDATE_CANCELED:
 	case SERVER_UPDATE_AVAILABLE:
+	case SERVER_ID_REQUESTED:
 	case SERVER_OK:
 		break;
 	case SERVER_EERR:
@@ -706,7 +773,7 @@ server_op_res_t server_install_update(void)
 	if (strncmp(json_object_get_string(json_deployment_update_action),
 		    deployment_update_action.forced,
 		    strlen(deployment_update_action.forced)) == 0) {
-		INFO("Update classified as 'FORCEd' by server.");
+		INFO("Update classified as 'FORCED' by server.");
 	} else if (strncmp(
 		       json_object_get_string(json_deployment_update_action),
 		       deployment_update_action.attempt,
@@ -866,64 +933,236 @@ cleanup:
 	return result;
 }
 
-void server_print_help(void)
+server_op_res_t server_send_target_data(void)
+{
+	struct dict_entry *entry;
+	bool first = true;
+	int len = 0;
+	server_op_res_t result = SERVER_OK;
+
+	LIST_FOREACH(entry, &server_hawkbit.configdata, next) {
+		len += strlen(entry->varname) + strlen(entry->value) + strlen (" : ") + 6;
+	}
+
+	if (!len)
+		return SERVER_OK;
+
+	char *configData = (char *)(malloc(len + 16));
+	memset(configData, 0, len + 16);
+
+	static const char* const config_data = STRINGIFY(
+		%c"%s": "%s"
+	);
+
+	char *keyvalue = NULL;
+	LIST_FOREACH(entry, &server_hawkbit.configdata, next) {
+		if (ENOMEM_ASPRINTF ==
+		    asprintf(&keyvalue, config_data,
+				((first) ? ' ' : ','),
+				entry->varname,
+				entry->value)) {
+			ERROR("hawkBit server reply cannot be sent because of OOM.\n");
+			result = SERVER_EINIT;
+			goto cleanup;
+		}
+		first = false;
+		TRACE("KEYVALUE=%s %s %s", keyvalue, entry->varname, entry->value);
+		strcat(configData, keyvalue);
+		free(keyvalue);
+
+	}
+
+	TRACE("CONFIGDATA=%s", configData);
+
+	static const char* const json_hawkbit_config_data = STRINGIFY(
+	{
+		"id": "%s",
+		"time": "%s",
+		"status": {
+			"result": {
+				"finished": "%s"
+			},
+			"execution": "%s",
+			"details" : [ "%s" ]
+		},
+		"data" : {
+			%s
+		}
+	}
+	);
+
+	char *url = NULL;
+	char *json_reply_string = NULL;
+	channel_data_t channel_data_reply = channel_data_defaults;
+	char fdate[15 + 1];
+	time_t now = time(NULL) == (time_t)-1 ? 0 : time(NULL);
+	(void)strftime(fdate, sizeof(fdate), "%Y%m%dT%H%M%S", localtime(&now));
+
+	if (ENOMEM_ASPRINTF ==
+	    asprintf(&json_reply_string, json_hawkbit_config_data,
+		     "", fdate, reply_status_result_finished.success,
+		     reply_status_execution.closed,
+		     "", configData)) {
+		ERROR("hawkBit server reply cannot be sent because of OOM.\n");
+		result = SERVER_EINIT;
+		goto cleanup;
+	}
+	if (ENOMEM_ASPRINTF ==
+	    asprintf(&url, "%s/%s/controller/v1/%s/configData",
+		     server_hawkbit.url, server_hawkbit.tenant,
+		     server_hawkbit.device_id)) {
+		ERROR("hawkBit server reply cannot be sent because of OOM.\n");
+		result = SERVER_EINIT;
+		goto cleanup;
+	}
+
+	channel_data_reply.url = url;
+	channel_data_reply.json_string = json_reply_string;
+	TRACE("URL=%s JSON=%s", channel_data_reply.url, channel_data_reply.json_string);
+	channel_data_reply.method = CHANNEL_PUT;
+	result = map_channel_retcode(channel.put((void *)&channel_data_reply));
+
+	if (result == SERVER_OK)
+		server_hawkbit.has_to_send_configData = false;
+
+cleanup:
+
+	free(configData);
+	if (url != NULL)
+		free(url);
+
+	if (json_reply_string)
+		free(json_reply_string);
+
+	return result;
+}
+
+void suricatta_print_help(void)
 {
 	fprintf(
 	    stderr,
-	    "Arguments (mandatory arguments are marked with '*'):\n"
-	    "  -t, --tenant      * Set hawkBit tenant ID for this device.\n"
-	    "  -u, --url         * Host and port of the hawkBit instance, "
+	    "\tsuricatta arguments (mandatory arguments are marked with '*'):\n"
+	    "\t  -t, --tenant      * Set hawkBit tenant ID for this device.\n"
+	    "\t  -u, --url         * Host and port of the hawkBit instance, "
 	    "e.g., localhost:8080\n"
-	    "  -i, --id          * The device ID to communicate to hawkBit.\n"
-	    "  -c, --confirm       Confirm update status to server: 1=AGAIN, "
+	    "\t  -i, --id          * The device ID to communicate to hawkBit.\n"
+	    "\t  -c, --confirm       Confirm update status to server: 1=AGAIN, "
 	    "2=SUCCESS, 3=FAILED\n"
-	    "  -x, --nocheckcert   Do not abort on flawed server "
+	    "\t  -x, --nocheckcert   Do not abort on flawed server "
 	    "certificates.\n"
-	    "  -p, --polldelay     Delay in seconds between two hawkBit "
+	    "\t  -p, --polldelay     Delay in seconds between two hawkBit "
 	    "poll operations (default: %ds).\n"
-	    "  -r, --retry         Resume and retry interrupted downloads "
+	    "\t  -r, --retry         Resume and retry interrupted downloads "
 	    "(default: %d tries).\n"
-	    "  -w, --retrywait     Time to wait between prior to retry and "
-	    "resume a download (default: %ds).\n"
-	    "  -l, --loglevel      set log level (0=OFF, ..., 5=TRACE)\n"
-	    "  -v, --verbose       Verbose operation, i.e., loglevel=TRACE\n",
+	    "\t  -w, --retrywait     Time to wait between prior to retry and "
+	    "resume a download (default: %ds).\n",
 	    DEFAULT_POLLING_INTERVAL, DEFAULT_RESUME_TRIES,
 	    DEFAULT_RESUME_DELAY);
 }
 
-server_op_res_t server_start(int argc, char *argv[])
+static int suricatta_settings(void *elem, void  __attribute__ ((__unused__)) *data)
+{
+	char tmp[128];
+
+	GET_FIELD_STRING(LIBCFG_PARSER, elem, "tenant", tmp);
+	if (strlen(tmp)) {
+		SETSTRING(server_hawkbit.tenant, tmp);
+		mandatory_argument_count |= TENANT_BIT;
+	}
+	GET_FIELD_STRING(LIBCFG_PARSER, elem, "id", tmp);
+	if (strlen(tmp)) {
+		SETSTRING(server_hawkbit.device_id, tmp);
+		mandatory_argument_count |= ID_BIT;
+	}
+	GET_FIELD_STRING(LIBCFG_PARSER, elem, "url", tmp);
+	if (strlen(tmp)) {
+		SETSTRING(server_hawkbit.url, tmp);
+		mandatory_argument_count |= URL_BIT;
+	}
+	GET_FIELD_STRING(LIBCFG_PARSER, elem, "polldelay", tmp);
+	if (strlen(tmp))
+		server_hawkbit.polling_interval =
+			(unsigned int)strtoul(tmp, NULL, 10);
+
+	GET_FIELD_STRING(LIBCFG_PARSER, elem, "retry", tmp);
+	if (strlen(tmp))
+		channel_data_defaults.retries =
+			(unsigned int)strtoul(tmp, NULL, 10);
+	GET_FIELD_STRING(LIBCFG_PARSER, elem, "retrywait", tmp);
+	if (strlen(tmp))
+		channel_data_defaults.retry_sleep =
+			(unsigned int)strtoul(tmp, NULL, 10);
+	GET_FIELD_STRING(LIBCFG_PARSER, elem, "cafile", tmp);
+	if (strlen(tmp))
+		SETSTRING(channel_data_defaults.cafile, tmp);
+	GET_FIELD_STRING(LIBCFG_PARSER, elem, "sslkey", tmp);
+	if (strlen(tmp))
+		SETSTRING(channel_data_defaults.sslkey, tmp);
+	GET_FIELD_STRING(LIBCFG_PARSER, elem, "sslcert", tmp);
+	if (strlen(tmp))
+		SETSTRING(channel_data_defaults.sslcert, tmp);
+
+	return 0;
+
+}
+
+static int suricatta_configdata_settings(void *settings, void  __attribute__ ((__unused__)) *data)
+{
+	void *elem;
+	int count, i;
+	char name[80], value[80];
+
+	count = get_array_length(LIBCFG_PARSER, settings);
+
+	for(i = 0; i < count; ++i) {
+		elem = get_elem_from_idx(LIBCFG_PARSER, settings, i);
+
+		if (!elem)
+			continue;
+
+		if(!(exist_field_string(LIBCFG_PARSER, elem, "name")))
+			continue;
+		if(!(exist_field_string(LIBCFG_PARSER, elem, "value")))
+			continue;
+
+		GET_FIELD_STRING(LIBCFG_PARSER, elem, "name", name);
+		GET_FIELD_STRING(LIBCFG_PARSER, elem, "value", value);
+		dict_set_value(&server_hawkbit.configdata, name, value);
+		TRACE("Identify for configData: %s --> %s\n",
+				name, value);
+	}
+
+	return 0;
+}
+
+server_op_res_t server_start(char *fname, int argc, char *argv[])
 {
 	update_state_t update_state = STATE_NOT_AVAILABLE;
 	int choice = 0;
-	unsigned short mandatory_argument_count = 0;
-	static struct option long_options[] = {
-	    {"help", no_argument, NULL, 'h'},
-	    {"tenant", required_argument, NULL, 't'},
-	    {"id", required_argument, NULL, 'i'},
-	    {"confirm", required_argument, NULL, 'c'},
-	    {"url", required_argument, NULL, 'u'},
-	    {"polldelay", required_argument, NULL, 'p'},
-	    {"nocheckcert", no_argument, NULL, 'x'},
-	    {"retry", required_argument, NULL, 'r'},
-	    {"retrywait", required_argument, NULL, 'w'},
-	    {"loglevel", required_argument, NULL, 'l'},
-	    {"verbose", no_argument, NULL, 'v'},
-	    {NULL, 0, NULL, 0}};
+
+	mandatory_argument_count = 0;
+
+	LIST_INIT(&server_hawkbit.configdata);
+
+	if (fname) {
+		read_module_settings(fname, "suricatta", suricatta_settings,
+					NULL);
+		read_module_settings(fname, "identify", suricatta_configdata_settings,
+					NULL);
+	}
+
 	/* reset to optind=1 to parse suricatta's argument vector */
 	optind = 1;
-	while ((choice = getopt_long(argc, argv, "ht:i:c:u:p:xr:w:l:v",
+	while ((choice = getopt_long(argc, argv, "t:i:c:u:p:xr:w:",
 				     long_options, NULL)) != -1) {
 		switch (choice) {
-		case 'h':
-			server_print_help();
-			exit(EXIT_SUCCESS);
 		case 't':
-			server_hawkbit.tenant = strdup(optarg);
-			mandatory_argument_count++;
+			SETSTRING(server_hawkbit.tenant, optarg);
+			mandatory_argument_count |= TENANT_BIT;
 			break;
 		case 'i':
-			server_hawkbit.device_id = strdup(optarg);
-			mandatory_argument_count++;
+			SETSTRING(server_hawkbit.device_id, optarg);
+			mandatory_argument_count |= ID_BIT;
 			break;
 		case 'c':
 			/* When no persistent update state storage is available,
@@ -939,13 +1178,13 @@ server_op_res_t server_start(int argc, char *argv[])
 				fprintf(
 				    stderr,
 				    "Error: Invalid update status given.\n");
-				server_print_help();
+				suricatta_print_help();
 				exit(EXIT_FAILURE);
 			}
 			break;
 		case 'u':
-			server_hawkbit.url = strdup(optarg);
-			mandatory_argument_count++;
+			SETSTRING(server_hawkbit.url, optarg);
+			mandatory_argument_count |= URL_BIT;
 			break;
 		case 'p':
 			server_hawkbit.polling_interval =
@@ -962,35 +1201,27 @@ server_op_res_t server_start(int argc, char *argv[])
 			channel_data_defaults.retry_sleep =
 			    (unsigned int)strtoul(optarg, NULL, 10);
 			break;
-		case 'l':
-			loglevel = (int)strtoul(optarg, NULL, 10);
-			if (loglevel >= DEBUGLEVEL) {
-				server_hawkbit.debug = true;
-			}
-			if (loglevel >= TRACELEVEL) {
-				channel_data_defaults.debug = true;
-			}
-			break;
-		case 'v':
-			/* set SWUpdate's loglevel to TRACE to see
-			 * suricatta's TRACE() calls */
-			loglevel = TRACELEVEL;
-			server_hawkbit.debug = true;
-			channel_data_defaults.debug = true;
-			break;
 		case '?':
 		default:
 			return SERVER_EINIT;
 		}
 	}
-	if (mandatory_argument_count != 3) {
+
+	if (loglevel >= DEBUGLEVEL) {
+		server_hawkbit.debug = true;
+	}
+	if (loglevel >= TRACELEVEL) {
+		channel_data_defaults.debug = true;
+	}
+
+	if (mandatory_argument_count != ALL_MANDATORY_SET) {
 		fprintf(stderr, "Mandatory arguments missing!\n");
-		server_print_help();
+		suricatta_print_help();
 		return SERVER_EINIT;
 	}
 	if (argc > optind) {
 		fprintf(stderr, "Unused arguments.\n");
-		server_print_help();
+		suricatta_print_help();
 		return SERVER_EINIT;
 	}
 	if (channel.open() != CHANNEL_OK) {

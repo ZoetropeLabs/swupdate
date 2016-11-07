@@ -38,7 +38,6 @@
 #include "cpiohdr.h"
 #include "util.h"
 #include "swupdate.h"
-#include "fw_env.h"
 #include "parsers.h"
 #include "network_interface.h"
 #include "handler.h"
@@ -52,6 +51,8 @@
 #include "sslapi.h"
 #include "suricatta/suricatta.h"
 #include "progress.h"
+#include "parselib.h"
+#include "swupdate_settings.h"
 
 #define MODULE_NAME	"swupdate"
 
@@ -79,6 +80,7 @@ struct flash_description *get_flash_info(void) {
 static struct option long_options[] = {
 	{"verbose", no_argument, NULL, 'v'},
 	{"image", required_argument, NULL, 'i'},
+	{"file", required_argument, NULL, 'f'},
 	{"loglevel", required_argument, NULL, 'l'},
 	{"syslog", no_argument, NULL, 'L' },
 	{"select", required_argument, NULL, 'e'},
@@ -115,8 +117,10 @@ int loglevel = 0;
 
 static void usage(char *programname)
 {
-	printf("%s (compiled %s)\n", programname, __DATE__);
-	printf(("Usage %s [OPTION]\n"
+	fprintf(stdout, "%s (compiled %s)\n", programname, __DATE__);
+	fprintf(stdout, "Usage %s [OPTION]\n", 
+			programname);
+	fprintf(stdout,
 #ifdef CONFIG_MTD
 		" -b, --blacklist <list of mtd>  : MTDs that must not be scanned for UBI\n"
 #endif
@@ -143,18 +147,22 @@ static void usage(char *programname)
 		" -s, --server                   : run as daemon waiting from\n"
 		"                                  IPC interface.\n"
 		" -v, --verbose                  : be verbose, set maximum loglevel\n"
-#ifdef CONFIG_SURICATTA
-		" -u, --suricatta [OPTIONS]      : Parameters to be passed to suricatta\n"
-#endif
-#ifdef CONFIG_WEBSERVER
-		" -w, --webserver [OPTIONS]      : Parameters to be passed to webserver\n"
-#endif
 #ifdef CONFIG_HW_COMPATIBILITY
 		" -H, --hwrevision <board>:<rev> : Set hardware revision\n"
 #endif
 		" -c, --check                    : check image and exit, use with -i <filename>\n"
-		" -h, --help                     : print this help and exit\n"),
-	       programname);
+		" -h, --help                     : print this help and exit\n"
+		);
+#ifdef CONFIG_SURICATTA
+	fprintf(stdout,
+		" -u, --suricatta [OPTIONS]      : Parameters to be passed to suricatta\n");
+	suricatta_print_help();
+#endif
+#ifdef CONFIG_WEBSERVER
+	fprintf(stdout,
+		" -w, --webserver [OPTIONS]      : Parameters to be passed to webserver\n");
+	mongoose_print_help();
+#endif
 }
 
 static int check_provided(struct imglist *list)
@@ -403,21 +411,34 @@ static void swupdate_init(struct swupdate_cfg *sw)
 #endif
 }
 
+static int read_globals_settings(void *elem, void *data)
+{
+	struct swupdate_cfg *sw = (struct swupdate_cfg *)data;
+
+	GET_FIELD_STRING(LIBCFG_PARSER, elem,
+				"public-key-file", sw->globals.publickeyfname);
+	GET_FIELD_STRING(LIBCFG_PARSER, elem,
+				"aes-key-file", sw->globals.aeskeyfname);
+	GET_FIELD_STRING(LIBCFG_PARSER, elem,
+				"mtd-blacklist", sw->globals.mtdblacklist);
+	get_field(LIBCFG_PARSER, elem, "verbose", &sw->globals.verbose);
+	get_field(LIBCFG_PARSER, elem, "loglevel", &sw->globals.loglevel);
+	get_field(LIBCFG_PARSER, elem, "syslog", &sw->globals.syslog_enabled);
+
+	return 0;
+}
+
 int main(int argc, char **argv)
 {
 	int c;
 	char fname[MAX_IMAGE_FNAME];
-	char pubkeyfname[MAX_IMAGE_FNAME];
-	char aeskeyfname[MAX_IMAGE_FNAME];
+	char *cfgfname = NULL;
 	const char *software_select = NULL;
 	int opt_i = 0;
-	int opt_k = 0;
-	int opt_K = 0;
 	int opt_e = 0;
 	int opt_s = 0;
 	int opt_u = 0;
 	int opt_w = 0;
-	int opt_L = 0;
 	int opt_c = 0;
 	char image_url[MAX_URL];
 	int opt_d = 0;
@@ -443,7 +464,7 @@ int main(int argc, char **argv)
 #endif
 	memset(main_options, 0, sizeof(main_options));
 	memset(image_url, 0, sizeof(image_url));
-	strcpy(main_options, "pvhi:se:l:Lc");
+	strcpy(main_options, "pvhi:se:l:Lcf:");
 #ifdef CONFIG_MTD
 	strcat(main_options, "b:");
 #endif
@@ -478,6 +499,45 @@ int main(int argc, char **argv)
 	/* Initialize internal database */
 	swupdate_init(&swcfg);
 
+	/*
+	 * Initialize notifier to enable at least output
+	 * on the console
+	 */
+	notify_init();
+
+	/*
+	 * Check if there is a configuration file and parse it
+	 * Parse once the command line just to find if a
+	 * configuration file is passed
+	 */
+	while ((c = getopt_long(argc, argv, main_options,
+				long_options, NULL)) != EOF) {
+		switch (c) {
+		case 'f':
+			cfgfname = sdup(optarg);
+			if (read_module_settings(cfgfname, "globals",
+				read_globals_settings, &swcfg)) {
+				fprintf(stderr,
+					 "Error parsing configuration file, exiting..\n");
+				exit(1);
+			}
+
+			loglevel = swcfg.globals.loglevel;
+			if (swcfg.globals.verbose)
+				loglevel = TRACELEVEL;
+			break;
+		}
+	}
+
+	/*
+	 * Command line should be parsed a second time
+	 * This let line parameters overload
+	 * setup in the configuration file
+	 * According to getopt(), this can be done by setting to 0
+	 * the external global optind variable
+	 */
+	optind = 0;
+
 	/* Process options with getopt */
 	while ((c = getopt_long(argc, argv, main_options,
 				long_options, NULL)) != EOF) {
@@ -498,23 +558,26 @@ int main(int argc, char **argv)
 			loglevel = strtoul(optarg, NULL, 10);
 			break;
 		case 'L':
-			opt_L = 1;
+			swcfg.globals.syslog_enabled = 1;
 			break;
 		case 'k':
-			strncpy(pubkeyfname,
-				optarg, sizeof(pubkeyfname));
-			opt_k = 1;
+			strncpy(swcfg.globals.publickeyfname,
+				optarg,
+			       	sizeof(swcfg.globals.publickeyfname));
 			break;
 #ifdef CONFIG_ENCRYPTED_IMAGES
 		case 'K':
-			strncpy(aeskeyfname,
-				optarg, sizeof(aeskeyfname));
-			opt_K = 1;
+			strncpy(swcfg.globals.aeskeyfname,
+				optarg,
+			       	sizeof(swcfg.globals.aeskeyfname));
 			break;
 #endif
 		case 'e':
 			software_select = optarg;
 			opt_e = 1;
+			break;
+		/* Configuration file already parsed, ignores it */
+		case 'f':
 			break;
 		case 'h':
 			usage(argv[0]);
@@ -567,7 +630,12 @@ int main(int argc, char **argv)
 		}
 	}
 
-	if (public_key_mandatory && !opt_k) {
+#ifdef CONFIG_MTD
+	if (strlen(swcfg.globals.mtdblacklist))
+		mtd_set_ubiblacklist(swcfg.globals.mtdblacklist);
+#endif
+
+	if (public_key_mandatory && !strlen(swcfg.globals.publickeyfname)) {
 		fprintf(stderr,
 			 "swupdate built for signed image, provide a public key file\n");
 		usage(argv[0]);
@@ -583,8 +651,8 @@ int main(int argc, char **argv)
 
 	swupdate_crypto_init();
 
-	if (opt_k) {
-		if (swupdate_dgst_init(&swcfg, pubkeyfname)) {
+	if (strlen(swcfg.globals.publickeyfname)) {
+		if (swupdate_dgst_init(&swcfg, swcfg.globals.publickeyfname)) {
 			fprintf(stderr,
 				 "Crypto cannot be initialized\n");
 			exit(1);
@@ -595,8 +663,8 @@ int main(int argc, char **argv)
 	 * If a aes key is passed, load it to allow
 	 * to decrypt images
 	 */
-	if (opt_K) {
-		if (load_decryption_key(aeskeyfname)) {
+	if (strlen(swcfg.globals.aeskeyfname)) {
+		if (load_decryption_key(swcfg.globals.aeskeyfname)) {
 			fprintf(stderr,
 				"Key file does not contain a valid AES key\n");
 			exit(1);
@@ -610,8 +678,7 @@ int main(int argc, char **argv)
 		printf("Running on %s Revision %s\n", swcfg.hw.boardname, swcfg.hw.revision);
 
 	print_registered_handlers();
-	notify_init();
-	if (opt_L) {
+	if (swcfg.globals.syslog_enabled) {
 		if (syslog_init()) {
 			ERROR("failed to initialize syslog notifier");
 		}
@@ -627,7 +694,7 @@ int main(int argc, char **argv)
 	}
 
 	/* Read sw-versions */
-	get_sw_versions(&swcfg);
+	get_sw_versions(cfgfname, &swcfg);
 
 	/*
 	 *  Do not start daemon if just a check is required
@@ -663,12 +730,12 @@ int main(int argc, char **argv)
 	/* Start embedded web server */
 #if defined(CONFIG_MONGOOSE)
 	if (opt_w)
-		start_mongoose(ac, av);
+		start_mongoose(cfgfname, ac, av);
 #endif
 
 #if defined(CONFIG_SURICATTA)
 	if (opt_u) {
-		start_suricatta(argcount, argvalues);
+		start_suricatta(cfgfname, argcount, argvalues);
     }
 #endif
 

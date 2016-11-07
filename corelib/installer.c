@@ -167,7 +167,7 @@ static int prepare_uboot_script(struct swupdate_cfg *cfg, const char *script)
 {
 	int fd;
 	int ret = 0;
-	struct uboot_var *ubootvar;
+	struct dict_entry *ubootvar;
 	char buf[MAX_UBOOT_SCRIPT_LINE_LENGTH];
 
 	fd = openfileoutput(script);
@@ -175,6 +175,8 @@ static int prepare_uboot_script(struct swupdate_cfg *cfg, const char *script)
 		return -1;
 
 	LIST_FOREACH(ubootvar, &cfg->uboot, next) {
+		if (!ubootvar->varname || !ubootvar->value)
+			continue;
 		snprintf(buf, sizeof(buf), "%s %s\n",
 			ubootvar->varname,
 			ubootvar->value);
@@ -194,7 +196,7 @@ static int update_uboot_env(void)
 
 #ifdef CONFIG_UBOOT
 	TRACE("Updating U-boot environment");
-	ret = fw_parse_script((char *)UBOOT_SCRIPT, NULL);
+	ret = fw_parse_script((char *)UBOOT_SCRIPT, fw_env_opts);
 	if (ret < 0)
 		ERROR("Error updating U-Boot environment");
 #else
@@ -364,7 +366,7 @@ static void remove_sw_file(char __attribute__ ((__unused__)) *fname)
 void cleanup_files(struct swupdate_cfg *software) {
 	char fn[64];
 	struct img_type *img;
-	struct uboot_var *ubootvar;
+	struct dict_entry *ubootvar;
 	struct hw_type *hw;
 
 	LIST_FOREACH(img, &software->images, next) {
@@ -384,8 +386,7 @@ void cleanup_files(struct swupdate_cfg *software) {
 		free(img);
 	}
 	LIST_FOREACH(ubootvar, &software->uboot, next) {
-		LIST_REMOVE(ubootvar, next);
-		free(ubootvar);
+		dict_remove_entry(ubootvar);
 	}
 
 	LIST_FOREACH(hw, &software->hardware, next) {

@@ -33,7 +33,9 @@ typedef struct {
 	char *tenant;
 	unsigned int polling_interval;
 	bool debug;
-	char _pad[3];
+	struct dictlist configdata;
+	bool has_to_send_configData;
+	char *configData_url;
 } server_hawkbit_t;
 
 extern server_hawkbit_t server_hawkbit;

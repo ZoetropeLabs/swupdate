@@ -1,6 +1,6 @@
 /*
- * (C) Copyright 2002-2008
- * Wolfgang Denk, DENX Software Engineering, wd@denx.de.
+ * (C) Copyright 2016
+ * Stefano Babic, DENX Software Engineering, sbabic@denx.de.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License as
@@ -18,22 +18,20 @@
  * MA 02111-1307 USA
  */
 
-#include <stdint.h>
+#ifndef _SWDICT_H
+#define _SWDICT_H
 
-#define AES_KEY_LENGTH  (128 / 8)
-
-struct env_opts {
-        char *config_file;
-        int aes_flag; /* Is AES encryption used? */
-        uint8_t aes_key[AES_KEY_LENGTH];
+struct dict_entry {
+	char *varname;
+	char *value;
+	LIST_ENTRY(dict_entry) next;
 };
 
-extern struct env_opts *fw_env_opts;
+LIST_HEAD(dictlist, dict_entry);
 
-int fw_parse_script(char *fname, struct env_opts *opts);
-char *fw_getenv(char *name);
-int fw_env_open(struct env_opts *opts);
-int fw_env_write(char *name, char *value);
-int fw_env_close(struct env_opts *opts);
+char *dict_get_value(struct dictlist *dictionary, char *key);
+int dict_set_value(struct dictlist *dictionary, char *key, char *value);
+void dict_remove(struct dictlist *dictionary, char *key);
+void dict_remove_entry(struct dict_entry *entry);
 
-extern unsigned	long  crc32	 (unsigned long, const unsigned char *, unsigned);
+#endif

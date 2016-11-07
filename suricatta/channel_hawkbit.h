@@ -31,17 +31,26 @@
  * and unit tests only.
  */
 
+typedef enum {
+	CHANNEL_GET,
+	CHANNEL_POST,
+	CHANNEL_PUT,
+} channel_method_t;
+
 typedef struct {
 	char *url;
 	char *json_string;
 	json_object *json_reply;
-	bool debug;
-	unsigned char retries;
-	bool strictssl;
-	char _pad;
+	char *cafile;
+	char *sslkey;
+	char *sslcert;
 	unsigned int retry_sleep;
+	unsigned int offs;
+	unsigned int method;
+	unsigned char retries;
+	bool debug;
+	bool strictssl;
 #ifdef CONFIG_SURICATTA_SSL
 	char sha1hash[SHA_DIGEST_LENGTH * 2 + 1];
-	char _pad2[7];
 #endif
 } channel_data_t;

@@ -20,21 +20,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <unistd.h>
 #include <string.h>
-#include <getopt.h>
-#include <errno.h>
-#include <sys/ioctl.h>
-#include <fcntl.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <ctype.h>
-#include <fcntl.h>
-#include <dirent.h>
-#include <sys/select.h>
-#include <sys/mman.h>
-#include <sys/reboot.h>
-#include <sys/stat.h>
 
 #include "bsdqueue.h"
 #include "util.h"
@@ -95,6 +81,9 @@ static void console_notifier (RECOVERY_STATUS status, int error, const char *msg
 		break;
 	case FAILURE:
 		snprintf(current, sizeof(current), "SWUPDATE failed [%d]", error);
+		break;
+	case DONE:
+		strncpy(current, "SWUPDATE done : ", sizeof(current));
 		break;
 	}
 

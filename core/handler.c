@@ -19,14 +19,11 @@
  * MA 02111-1307 USA
  */
 
-#include <stdio.h>
 #include <stdlib.h>
+#include <stdio.h>
 #include <unistd.h>
 #include <string.h>
-#include <getopt.h>
-#include <errno.h>
-#include <sys/ioctl.h>
-#include <fcntl.h>
+
 #include "swupdate.h"
 #include "handler.h"
 #include "lua_util.h"
@@ -178,6 +175,7 @@ static int luaopen_swupdate(lua_State *L) {
 	lua_push_enum(L, "SUCCESS", SUCCESS);
 	lua_push_enum(L, "FAILURE", FAILURE);
 	lua_push_enum(L, "DOWNLOAD", DOWNLOAD);
+	lua_push_enum(L, "DONE", DONE);
 	lua_settable(L, -3);
 
 	return 1;

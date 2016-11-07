@@ -22,6 +22,7 @@
 #define _UTIL_H
 
 #include <stdint.h>
+#include <string.h>
 #include "swupdate.h"
 #include "swupdate_status.h"
 
@@ -53,7 +54,7 @@ typedef void (*notifier) (RECOVERY_STATUS status, int level, const char *msg);
 
 #define swupdate_notify(status, format, level, arg...) do { \
 	if (loglevel >= level) { \
-		char tmpbuf[1024]; \
+		char tmpbuf[2048]; \
 		if (status == FAILURE) { \
 			if (loglevel >= DEBUGLEVEL) \
 				snprintf(tmpbuf, sizeof(tmpbuf), \
@@ -112,13 +113,7 @@ int IsValidHash(const unsigned char *hash);
 		typeof(b) _b = b;\
 		_a < _b ? _a : _b; })
 
-
-int gpio_export(int gpio);
-int gpio_unexport(int gpio);
-int gpio_direction_input(int gpio_number);
-int gpio_direction_output(int gpio_number, int value);
-int gpio_set_value(int gpio_number, int value);
-int gpio_get_value(int gpio_number);
+char *sdup(const char *str);
 
 /*
  * Function to extract / copy images
@@ -149,7 +144,7 @@ char **splitargs(char *args, int *argc);
 void freeargs (char **argv);
 int isDirectoryEmpty(const char *dirname);
 int get_hw_revision(struct hw_type *hw);
-void get_sw_versions(struct swupdate_cfg *sw);
+void get_sw_versions(char *cfgfname, struct swupdate_cfg *sw);
 int check_hw_compatibility(struct swupdate_cfg *cfg);
 int count_elem_list(struct imglist *list);
 

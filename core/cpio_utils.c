@@ -17,23 +17,14 @@
  * Foundation, Inc.
  */
 
-#include <stdio.h>
 #include <stdlib.h>
-#include <stdint.h>
+#include <stdio.h>
 #include <unistd.h>
-#include <string.h>
-#include <getopt.h>
 #include <errno.h>
-#include <ctype.h>
-#include <sys/types.h>
-#include <fcntl.h>
 
 #include "generated/autoconf.h"
-#include "bsdqueue.h"
 #include "cpiohdr.h"
 #include "util.h"
-#include "swupdate.h"
-#include "parsers.h"
 #include "sslapi.h"
 #include "progress.h"
 
@@ -62,7 +53,7 @@ static int get_cpiohdr(unsigned char *buf, long *size, long *namesize, long *chk
 int fill_buffer(int fd, unsigned char *buf, int nbytes, unsigned long *offs,
 	uint32_t *checksum, void *dgst)
 {
-	unsigned long len;
+	ssize_t len;
 	unsigned long count = 0;
 	int i;
 

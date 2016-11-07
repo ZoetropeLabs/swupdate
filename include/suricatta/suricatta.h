@@ -52,6 +52,8 @@ typedef enum {
 	SERVER_UPDATE_AVAILABLE,
 	SERVER_NO_UPDATE_AVAILABLE,
 	SERVER_UPDATE_CANCELED,
+	SERVER_ID_REQUESTED,
 } server_op_res_t;
 
-void start_suricatta(int argc, char *argv[]) __attribute__((noreturn));
+void start_suricatta(char *cfgname, int argc, char *argv[]) __attribute__((noreturn));
+void suricatta_print_help(void);

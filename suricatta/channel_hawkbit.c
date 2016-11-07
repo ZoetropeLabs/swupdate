@@ -43,11 +43,6 @@
 #define EXPANDTOKL2(token) token
 #define EXPANDTOK(token) EXPANDTOKL2(token)
 
-typedef enum {
-	CHANNEL_GET,
-	CHANNEL_POST,
-} channel_method_t;
-
 typedef struct {
 	char *memory;
 	size_t size;
@@ -324,14 +319,18 @@ channel_op_res_t channel_set_options(channel_data_t *channel_data,
 	}
 
 	if (channel_data->strictssl == true) {
-		/* TODO set CURLOPT_CAINFO to the path to the system's CA bundle
-		 *      file to verify the peer with, default is set at curl's
-		 *      build time. */
-		/* TODO set CURLOPT_CAPATH to the OpenSSL directory holding the
-		 *      multiple CA certificates. */
 		if ((curl_easy_setopt(channel_curl.handle,
 				      CURLOPT_SSL_VERIFYHOST,
 				      2L) != CURLE_OK) ||
+		    (curl_easy_setopt(channel_curl.handle,
+				      CURLOPT_CAINFO,
+				      channel_data->cafile) != CURLE_OK) ||
+		    (curl_easy_setopt(channel_curl.handle,
+				      CURLOPT_SSLKEY,
+				      channel_data->sslkey) != CURLE_OK) ||
+		    (curl_easy_setopt(channel_curl.handle,
+				      CURLOPT_SSLCERT,
+				      channel_data->sslcert) != CURLE_OK) ||
 		    (curl_easy_setopt(channel_curl.handle,
 				      CURLOPT_SSL_VERIFYPEER,
 				      1L) != CURLE_OK)) {
@@ -348,6 +347,15 @@ channel_op_res_t channel_set_options(channel_data_t *channel_data,
 			goto cleanup;
 		}
 		break;
+	case CHANNEL_PUT:
+		if ((curl_easy_setopt(channel_curl.handle, CURLOPT_PUT, 1L) !=
+		     CURLE_OK) ||
+		     (curl_easy_setopt(channel_curl.handle, CURLOPT_UPLOAD, 1L) !=
+		      CURLE_OK)) {
+			result = CHANNEL_EINIT;
+			goto cleanup;
+		}
+		break;
 	case CHANNEL_POST:
 		if ((curl_easy_setopt(channel_curl.handle, CURLOPT_POST, 1L) !=
 		     CURLE_OK) ||
@@ -355,6 +363,9 @@ channel_op_res_t channel_set_options(channel_data_t *channel_data,
 				      channel_data->json_string) != CURLE_OK)) {
 			result = CHANNEL_EINIT;
 			goto cleanup;
+		}
+		if (channel_data->debug) {
+			TRACE("Post JSON: %s\n", channel_data->json_string);
 		}
 		break;
 	}
@@ -392,7 +403,27 @@ cleanup:
 	return result;
 }
 
-channel_op_res_t channel_put(void *data)
+static size_t put_read_callback(void *ptr, size_t size, size_t nmemb, void *data)
+{
+	channel_data_t *channel_data = (channel_data_t *)data;
+	unsigned int bytes;
+	size_t n;
+
+	/* Check data to be sent */
+	bytes = strlen(channel_data->json_string) - channel_data->offs;
+
+	if (!bytes)
+		return 0;
+
+	n = min(bytes, size * nmemb);
+
+	memcpy(ptr, &channel_data->json_string[channel_data->offs], n);
+	channel_data->offs += n;
+
+	return n;
+}
+
+static channel_op_res_t channel_post_method(void *data)
 {
 	assert(data != NULL);
 	assert(channel_curl.handle != NULL);
@@ -440,6 +471,76 @@ channel_op_res_t channel_put(void *data)
 		      http_response_code);
 		goto cleanup_header;
 	}
+	TRACE("Channel put operation returned HTTP status code %ld.\n",
+	      http_response_code);
+
+cleanup_header:
+	curl_easy_reset(channel_curl.handle);
+	curl_slist_free_all(channel_curl.header);
+	channel_curl.header = NULL;
+
+	return result;
+}
+
+static channel_op_res_t channel_put_method(void *data)
+{
+	assert(data != NULL);
+	assert(channel_curl.handle != NULL);
+
+	channel_op_res_t result = CHANNEL_OK;
+	channel_data_t *channel_data = (channel_data_t *)data;
+	channel_data->offs = 0;
+
+	if (channel_data->debug) {
+		curl_easy_setopt(channel_curl.handle, CURLOPT_VERBOSE, 1L);
+	}
+
+	if (((channel_curl.header = curl_slist_append(
+		  channel_curl.header, "Content-Type: application/json")) ==
+	     NULL) ||
+	    ((channel_curl.header = curl_slist_append(
+		  channel_curl.header, "Accept: application/json")) == NULL) ||
+	    ((channel_curl.header = curl_slist_append(
+		  channel_curl.header, "charsets: utf-8")) == NULL)) {
+		ERROR("Set channel header failed.\n");
+		result = CHANNEL_EINIT;
+		goto cleanup_header;
+	}
+
+	if ((result = channel_set_options(channel_data, CHANNEL_PUT)) !=
+	    CHANNEL_OK) {
+		ERROR("Set channel option failed.\n");
+		goto cleanup_header;
+	}
+
+	if ((curl_easy_setopt(channel_curl.handle, CURLOPT_READFUNCTION, put_read_callback) !=
+		CURLE_OK) ||
+	   (curl_easy_setopt(channel_curl.handle, CURLOPT_INFILESIZE_LARGE, strlen(channel_data->json_string)) !=
+		CURLE_OK) ||
+	   (curl_easy_setopt(channel_curl.handle, CURLOPT_READDATA, channel_data) !=
+			CURLE_OK)) {
+		ERROR("Set channel option failed.\n");
+		goto cleanup_header;
+	}
+
+	CURLcode curlrc = curl_easy_perform(channel_curl.handle);
+	if (curlrc != CURLE_OK) {
+		ERROR("Channel put operation failed (%d): '%s'\n", curlrc,
+		      curl_easy_strerror(curlrc));
+		result = channel_map_curl_error(curlrc);
+		goto cleanup_header;
+	}
+
+	channel_log_effective_url();
+
+	long http_response_code;
+	if ((result = channel_map_http_code(
+		 channel_curl.proxy == NULL ? false : true,
+		 &http_response_code)) != CHANNEL_OK) {
+		ERROR("Channel operation returned HTTP error code %ld.\n",
+		      http_response_code);
+		goto cleanup_header;
+	}
 	TRACE("Channel put operation returned HTTP error code %ld.\n",
 	      http_response_code);
 
@@ -449,6 +550,24 @@ cleanup_header:
 	channel_curl.header = NULL;
 
 	return result;
+}
+
+channel_op_res_t channel_put(void *data)
+{
+	assert(data != NULL);
+	assert(channel_curl.handle != NULL);
+
+	channel_data_t *channel_data = (channel_data_t *)data;
+
+	switch (channel_data->method) {
+	case CHANNEL_PUT:
+		return channel_put_method(data);
+	case CHANNEL_POST:
+		return channel_post_method(data);
+	default:
+		TRACE("Channel method (POST, PUT) is not set !\n");
+		return CHANNEL_EINIT;
+	}
 }
 
 channel_op_res_t channel_get_file(void *data)
@@ -597,7 +716,7 @@ channel_op_res_t channel_get_file(void *data)
 		      http_response_code);
 		goto cleanup_file;
 	}
-	TRACE("Channel operation returned HTTP error code %ld.\n",
+	TRACE("Channel operation returned HTTP status code %ld.\n",
 	      http_response_code);
 
 	if (result_channel_callback_write_file != CHANNEL_OK) {
@@ -703,7 +822,7 @@ channel_op_res_t channel_get(void *data)
 		}
 		goto cleanup_chunk;
 	}
-	TRACE("Channel operation returned HTTP error code %ld.\n",
+	TRACE("Channel operation returned HTTP status code %ld.\n",
 	      http_response_code);
 
 	assert(channel_data->json_reply == NULL);
@@ -719,6 +838,9 @@ channel_op_res_t channel_get(void *data)
 		      json_tokener_error_desc(json_res));
 		result = CHANNEL_EBADMSG;
 		goto cleanup_json_tokenizer;
+	}
+	if (channel_data->debug) {
+		TRACE("Get JSON: %s\n", chunk.memory);
 	}
 
 cleanup_json_tokenizer:
