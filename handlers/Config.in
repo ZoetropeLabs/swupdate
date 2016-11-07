@@ -148,11 +148,4 @@ config UBOOT_FWENV
 	  in the tools directory. It tells where the U-Boot
 	  environment is saved.
 
-config UBOOT_TXT
-    bool "uboot_txt"
-	default n
-	help
-	  Make it so that a boot script can be modified
-	  rather than a typical uboot environment.
-
 endmenu
