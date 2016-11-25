@@ -67,6 +67,8 @@ static EVP_PKEY *load_pubkey(const char *filename)
 		goto end;
     }
 
+    TRACE("RSA key size %d", RSA_size(rsa_pkey));
+
     if (EVP_PKEY_type(pkey->type) != EVP_PKEY_RSA)
     {
         ERROR("Key type was not RSA");
