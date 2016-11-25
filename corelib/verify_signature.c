@@ -63,8 +63,14 @@ static EVP_PKEY *load_pubkey(const char *filename)
 	//pkey = PEM_read_bio_PUBKEY(key_bio, NULL, NULL, NULL);
     if (!EVP_PKEY_set1_RSA(pkey, rsa_pkey))
     {
-        ERROR("Error in EVP_PKEY_assign_RSA");
+        ERROR("Error in EVP_PKEY_set1_RSA");
 		goto end;
+    }
+
+    if (EVP_PKEY_type(pkey->type) != EVP_PKEY_RSA)
+    {
+        ERROR("Key type was not RSA");
+        goto end;
     }
  end:
     if (rsa_pkey != NULL) free(rsa_pkey);
