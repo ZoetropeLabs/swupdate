@@ -32,7 +32,7 @@
 static EVP_PKEY *load_pubkey(const char *filename)
 {
 	BIO *key_bio=NULL;
-	EVP_PKEY *pkey=EVP_PKEY_new();
+	EVP_PKEY *pkey=NULL;
     RSA *rsa_pkey = NULL;
 
 	if (filename == NULL)
@@ -59,6 +59,8 @@ static EVP_PKEY *load_pubkey(const char *filename)
         ERROR("Error reading RSA key from %s", filename);
 		goto end;
     }
+
+    pkey = EVP_PKEY_new();
 
 	//pkey = PEM_read_bio_PUBKEY(key_bio, NULL, NULL, NULL);
     if (!EVP_PKEY_set1_RSA(pkey, rsa_pkey))
