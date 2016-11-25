@@ -209,7 +209,7 @@ int swupdate_verify_file(struct swupdate_digest *dgst, const char *sigfile,
 	siglen = EVP_PKEY_size(dgst->pkey);
 
 	if(siglen <= 0) {
-		ERROR("Error getting size of key in file %s - err %ld\n", sigfile, ERR_peek_last_error());
+		ERROR("Error getting maximum size of signature from public key (got %d) - err %ld\n", siglen, ERR_peek_last_error());
 		status = -ENOKEY;
 		goto out;
 	}
