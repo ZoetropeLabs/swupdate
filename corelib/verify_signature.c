@@ -43,6 +43,7 @@ static EVP_PKEY *load_pubkey(const char *file)
 	key=BIO_new(BIO_s_file());
 	if (key == NULL)
 	{
+        ERROR("Error creating openssl file\n");
 		goto end;
 	}
 
