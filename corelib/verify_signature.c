@@ -41,28 +41,21 @@ static EVP_PKEY *load_pubkey(const char *filename)
 		goto end;
 	}
 
-	//key_bio=BIO_new(BIO_s_file());
-	//if (key_bio == NULL)
-	//{
-    //    ERROR("Error creating openssl file\n");
-	//	goto end;
-	//}
+	key_bio=BIO_new(BIO_s_file());
+	if (key_bio == NULL)
+	{
+        ERROR("Error creating openssl file\n");
+		goto end;
+	}
 
-	//if (BIO_read_filename(key_bio, filename) <= 0)
-	//{
-	//	printf("Error opening %s \n", filename);
-	//	goto end;
-	//}
-    FILE * fp = fopen(filename, "r");
-    if (!fp)
-    {
-        ERROR("Couldn't open key file %s", filename);
-        goto end;
-    }
+	if (BIO_read_filename(key_bio, filename) <= 0)
+	{
+		printf("Error opening %s \n", filename);
+		goto end;
+	}
 
     ERR_clear_error();
-    //if (!PEM_read_bio_RSA_PUBKEY(key_bio, &rsa_pkey, NULL, NULL))
-    if (!PEM_read_RSA_PUBKEY(fp, &rsa_pkey, NULL, NULL))
+    if (!PEM_read_bio_RSA_PUBKEY(key_bio, &rsa_pkey, NULL, NULL))
     {
         ERROR("Error reading RSA key from %s - %d", filename, ERR_peek_last_error());
 		goto end;
@@ -86,8 +79,7 @@ static EVP_PKEY *load_pubkey(const char *filename)
     }
  end:
     if (rsa_pkey != NULL) free(rsa_pkey);
-	//if (key_bio != NULL) BIO_free(key_bio);
-    if (fp != NULL) fclose(fp);
+	if (key_bio != NULL) BIO_free(key_bio);
 	if (pkey == NULL)
 		ERROR("unable to load key filename %s\n", filename);
 	return(pkey);
