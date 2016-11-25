@@ -57,7 +57,7 @@ static EVP_PKEY *load_pubkey(const char *filename)
     ERR_clear_error();
     if (!PEM_read_bio_RSA_PUBKEY(key_bio, &rsa_pkey, NULL, NULL))
     {
-        ERROR("Error reading RSA key from %s - %s", filename, ERR_error_string(ERR_get_error(), NULL));
+        ERROR("Error reading RSA key from %s - %d", filename, ERR_peek_last_error());
 		goto end;
     }
 
