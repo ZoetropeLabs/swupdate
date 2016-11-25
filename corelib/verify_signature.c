@@ -27,7 +27,7 @@
 #include "sslapi.h"
 #include "util.h"
 
-#define BUFSIZE	(1024 * 8)
+#define BUFSIZE	(1024 * 64)
 
 static EVP_PKEY *load_pubkey(const char *filename)
 {
