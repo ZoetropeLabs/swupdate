@@ -199,6 +199,14 @@ int swupdate_verify_file(struct swupdate_digest *dgst, const char *sigfile,
 		goto out;
 	}
 
+	siglen = EVP_PKEY_size(dgst->pkey);
+
+	if(siglen <= 0) {
+		ERROR("Error getting size of key in file %s - err %ld\n", sigfile, ERR_peek_last_error());
+		status = -ENOKEY;
+		goto out;
+	}
+
 	msg = malloc(BUFSIZE);
 	if (!msg) {
 		status = -ENOMEM;
@@ -209,14 +217,6 @@ int swupdate_verify_file(struct swupdate_digest *dgst, const char *sigfile,
 
 	if(sigbio == NULL) {
 		ERROR("Error opening signature file %s\n", sigfile);
-		status = -ENOKEY;
-		goto out;
-	}
-
-	siglen = EVP_PKEY_size(dgst->pkey);
-
-	if(siglen <= 0) {
-		ERROR("Error getting size of key in file %s - err %ld\n", sigfile, ERR_peek_last_error());
 		status = -ENOKEY;
 		goto out;
 	}
