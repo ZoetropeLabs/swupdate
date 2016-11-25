@@ -29,35 +29,47 @@
 
 #define BUFSIZE	(1024 * 8)
 
-static EVP_PKEY *load_pubkey(const char *file)
+static EVP_PKEY *load_pubkey(const char *filename)
 {
-	BIO *key=NULL;
-	EVP_PKEY *pkey=NULL;
+	BIO *key_bio=NULL;
+	EVP_PKEY *pkey=EVP_PKEY_new();
+    RSA *rsa_pkey = NULL;
 
-	if (file == NULL)
+	if (filename == NULL)
 	{
 		ERROR("no keyfile specified\n");
 		goto end;
 	}
 
-	key=BIO_new(BIO_s_file());
-	if (key == NULL)
+	key_bio=BIO_new(BIO_s_file());
+	if (key_bio == NULL)
 	{
         ERROR("Error creating openssl file\n");
 		goto end;
 	}
 
-	if (BIO_read_filename(key, file) <= 0)
+	if (BIO_read_filename(key_bio, filename) <= 0)
 	{
 		printf("Error opening %s \n", file);
 		goto end;
 	}
 
-	pkey=PEM_read_bio_RSA_PUBKEY(key, NULL, NULL, NULL);
+    if (!PEM_read_RSA_PUBKEY(key_bio, &rsa_pkey, NULL, NULL))
+    {
+        ERROR("Error reading RSA key from %s", filename)
+		goto end;
+    }
+
+	//pkey = PEM_read_bio_PUBKEY(key_bio, NULL, NULL, NULL);
+    if (!EVP_PKEY_assign_RSA(pkey, rsa_pkey))
+    {
+        ERROR("Error in EVP_PKEY_assign_RSA");
+		goto end;
+    }
  end:
-	if (key != NULL) BIO_free(key);
+	if (key_bio != NULL) BIO_free(key_bio);
 	if (pkey == NULL)
-		ERROR("unable to load key filename %s\n", file);
+		ERROR("unable to load key filename %s\n", filename);
 	return(pkey);
 }
 
