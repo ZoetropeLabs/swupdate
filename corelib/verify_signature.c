@@ -61,12 +61,13 @@ static EVP_PKEY *load_pubkey(const char *filename)
     }
 
 	//pkey = PEM_read_bio_PUBKEY(key_bio, NULL, NULL, NULL);
-    if (!EVP_PKEY_assign_RSA(pkey, rsa_pkey))
+    if (!EVP_PKEY_set1_RSA(pkey, rsa_pkey))
     {
         ERROR("Error in EVP_PKEY_assign_RSA");
 		goto end;
     }
  end:
+    if (rsa_pkey != NULL) free(rsa_pkey);
 	if (key_bio != NULL) BIO_free(key_bio);
 	if (pkey == NULL)
 		ERROR("unable to load key filename %s\n", filename);
