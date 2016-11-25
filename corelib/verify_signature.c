@@ -53,7 +53,7 @@ static EVP_PKEY *load_pubkey(const char *file)
 		goto end;
 	}
 
-	pkey=PEM_read_bio_PUBKEY(key, NULL, NULL, NULL);
+	pkey=PEM_read_bio_RSA_PUBKEY(key, NULL, NULL, NULL);
  end:
 	if (key != NULL) BIO_free(key);
 	if (pkey == NULL)
