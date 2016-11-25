@@ -50,11 +50,11 @@ static EVP_PKEY *load_pubkey(const char *filename)
 
 	if (BIO_read_filename(key_bio, filename) <= 0)
 	{
-		printf("Error opening %s \n", file);
+		printf("Error opening %s \n", filename);
 		goto end;
 	}
 
-    if (!PEM_read_RSA_PUBKEY(key_bio, &rsa_pkey, NULL, NULL))
+    if (!PEM_read_bio_RSA_PUBKEY(key_bio, &rsa_pkey, NULL, NULL))
     {
         ERROR("Error reading RSA key from %s", filename);
 		goto end;
