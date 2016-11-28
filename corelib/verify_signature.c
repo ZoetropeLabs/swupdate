@@ -236,7 +236,6 @@ int swupdate_verify_file(struct swupdate_digest *dgst, const char *sigfile,
 	sigbuf = OPENSSL_malloc(siglen);
 
 	siglen = BIO_read(sigbio, sigbuf, siglen);
-	BIO_free(sigbio);
 
 	if(siglen <= 0) {
 		ERROR("Error reading signature file %s\n", sigfile);
@@ -289,6 +288,8 @@ out:
 		free(msg);
 	if (sigbuf)
 		OPENSSL_free(sigbuf);
+    if (sigbio)
+        BIO_free(sigbio);
 
 	return status;
 }
