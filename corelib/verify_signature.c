@@ -78,7 +78,7 @@ static EVP_PKEY *load_pubkey(const char *filename)
         goto end;
     }
  end:
-    if (rsa_pkey != NULL) free(rsa_pkey);
+    if (rsa_pkey != NULL) RSA_free(rsa_pkey);
 	if (key_bio != NULL) BIO_free(key_bio);
 	if (pkey == NULL)
 		ERROR("unable to load key filename %s\n", filename);
