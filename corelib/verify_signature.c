@@ -61,6 +61,8 @@ static EVP_PKEY *load_pubkey(const char *filename)
 		goto end;
     }
 
+    TRACE("RSA key size %d", RSA_size(rsa_pkey));
+
     pkey = EVP_PKEY_new();
 
 	//pkey = PEM_read_bio_PUBKEY(key_bio, NULL, NULL, NULL);
@@ -69,8 +71,6 @@ static EVP_PKEY *load_pubkey(const char *filename)
         ERROR("Error in EVP_PKEY_set1_RSA");
 		goto end;
     }
-
-    TRACE("RSA key size %d", RSA_size(rsa_pkey));
 
     if (EVP_PKEY_type(pkey->type) != EVP_PKEY_RSA)
     {
@@ -98,12 +98,12 @@ static int dgst_init(struct swupdate_digest *dgst,
         }
 
 	if (init_verify) {
-	        rc = EVP_DigestVerifyInit(dgst->ctx, NULL, EVP_sha256(), NULL, dgst->pkey);
-		if(rc != 1) {
-			ERROR("EVP_DigestVerifyInit failed, error 0x%lx\n", ERR_get_error());
-			return -EFAULT; /* failed */
-		}
+        rc = EVP_DigestVerifyInit(dgst->ctx, NULL, EVP_sha256(), NULL, dgst->pkey);
+        if(rc != 1) {
+            ERROR("EVP_DigestVerifyInit failed, error 0x%lx\n", ERR_get_error());
+            return -EFAULT; /* failed */
         }
+    }
 
 	return 0;
 }
@@ -130,7 +130,7 @@ static int verify_final(struct swupdate_digest *dgst, unsigned char *sig, unsign
         rc = EVP_DigestVerifyFinal(dgst->ctx, sig, slen);
         if(rc != 1) {
             ERROR("EVP_DigestVerifyFinal failed, error 0x%lx %d\n", ERR_get_error(), rc);
-	    return -1;
+            return -1;
         }
 
 	return rc;
