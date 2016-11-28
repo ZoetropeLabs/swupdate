@@ -144,10 +144,10 @@ int copyfile(int fdin, void *out, int nbytes, unsigned long *offs,
         }
 	}
 
+    TRACE("Checksum = %d", *checksum);
+
 	if (checksum)
 		*checksum = 0;
-
-    TRACE("Checksum = %d", *checksum);
 
 	/*
 	 * Simultaneous compression and decryption of images
@@ -427,6 +427,7 @@ off_t extract_next_file(int fd, int fdout, off_t start, int compressed,
 
 	if (extract_cpio_header(fd, &fdh, &offset)) {
 		ERROR("CPIO Header wrong\n");
+        return -1;
 	}
 
 	if (lseek(fd, offset, SEEK_SET) < 0)
