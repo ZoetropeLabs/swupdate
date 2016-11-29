@@ -232,6 +232,8 @@ RECOVERY_STATUS download_from_url(char *image_url, int retries,
         char * hoststring = malloc(strlen(image_url)*sizeof(char));
         snprintf(hoststring, strlen(image_url), "Host: %s", urlpart);
 
+        TRACE("Adding host header: %s", urlpart);
+
         struct curl_slist *chunk = NULL;
         chunk = curl_slist_append(chunk, hoststring);
 
