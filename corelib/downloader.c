@@ -218,20 +218,6 @@ RECOVERY_STATUS download_from_url(char *image_url, int retries,
 		return FAILURE;
 	}
 
-    if (strstr(image_url, "amazonaws"))
-    {
-        struct curl_slist *chunk = NULL;
-        chunk = curl_slist_append(chunk, "Accept:");
-
-        res = curl_easy_setopt(curl_handle, CURLOPT_HTTPHEADER, chunk);
-
-        if(res != CURLE_OK)
-        {
-            ERROR("Error adding HOST header to request");
-            return FAILURE;
-        }
-    }
-
 	curl_easy_setopt(curl_handle, CURLOPT_WRITEFUNCTION, write_data);
 	curl_easy_setopt(curl_handle, CURLOPT_WRITEDATA, &fd);
 	set_option_common(curl_handle, lowspeed_time, &progress);
