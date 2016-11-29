@@ -220,27 +220,10 @@ RECOVERY_STATUS download_from_url(char *image_url, int retries,
 
     if (strstr(image_url, "amazonaws"))
     {
-        // copy into another buffer so strok doesn't destroy it
-        char * imagebuf = malloc((strlen(image_url) + 1)*sizeof(char));
-        strncpy(imagebuf, image_url, strlen(image_url) + 1);
-
-        char * urlpart = strtok(imagebuf, "/");
-        // skip the first https
-        urlpart = strtok(NULL, "/");
-
-        // will always be shorter than this
-        char * hoststring = malloc(strlen(image_url)*sizeof(char));
-        snprintf(hoststring, strlen(image_url), "Host: %s", urlpart);
-
-        TRACE("Adding host header: %s", urlpart);
-
         struct curl_slist *chunk = NULL;
-        chunk = curl_slist_append(chunk, hoststring);
+        chunk = curl_slist_append(chunk, "Accept:");
 
         res = curl_easy_setopt(curl_handle, CURLOPT_HTTPHEADER, chunk);
-
-        free(hoststring);
-        free(imagebuf);
 
         if(res != CURLE_OK)
         {
