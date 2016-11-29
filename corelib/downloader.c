@@ -235,8 +235,16 @@ RECOVERY_STATUS download_from_url(char *image_url, int retries,
         struct curl_slist *chunk = NULL;
         chunk = curl_slist_append(chunk, hoststring);
 
+        res = curl_easy_setopt(curl_handle, CURLOPT_HTTPHEADER, chunk);
+
         free(hoststring);
         free(imagebuf);
+
+        if(res != CURLE_OK)
+        {
+            ERROR("Error adding HOST header to request");
+            return FAILURE;
+        }
     }
 
 	curl_easy_setopt(curl_handle, CURLOPT_WRITEFUNCTION, write_data);
