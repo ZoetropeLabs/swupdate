@@ -33,6 +33,8 @@ static EVP_PKEY *load_pubkey(const char *filename)
 {
 	BIO *key_bio=NULL;
 	EVP_PKEY *pkey=NULL;
+
+#ifdef RSA_SIGNED
     RSA *rsa_pkey = NULL;
 
 	if (filename == NULL)
@@ -83,6 +85,40 @@ static EVP_PKEY *load_pubkey(const char *filename)
 	if (pkey == NULL)
 		ERROR("unable to load key filename %s\n", filename);
 	return(pkey);
+#else
+	if (filename == NULL)
+	{
+		ERROR("no keyfile specified\n");
+		goto end;
+	}
+
+	key_bio=BIO_new(BIO_s_file());
+	if (key_bio == NULL)
+	{
+        ERROR("Error creating openssl file\n");
+		goto end;
+	}
+
+	if (BIO_read_filename(key_bio, filename) <= 0)
+	{
+		printf("Error opening %s \n", filename);
+		goto end;
+	}
+
+    pkey = EVP_PKEY_new();
+
+    ERR_clear_error();
+    if (!PEM_read_bio_PUBKEY(key_bio, &pkey, NULL, NULL))
+    {
+        ERROR("Error reading key from %s - %d", filename, ERR_peek_last_error());
+		goto end;
+    }
+ end:
+	if (key_bio != NULL) BIO_free(key_bio);
+	if (pkey == NULL)
+		ERROR("unable to load key filename %s\n", filename);
+	return(pkey);
+#endif
 }
 
 static int dgst_init(struct swupdate_digest *dgst,
