@@ -178,6 +178,7 @@ RECOVERY_STATUS download_from_url(char *image_url, int retries,
 	unsigned long long dwlbytes = 0;
 	int i;
 	struct dlprogress progress;
+	long response_code;
 
 	if (!strlen(image_url)) {
 		ERROR("Image URL not provided... aborting download and update\n");
@@ -239,6 +240,9 @@ RECOVERY_STATUS download_from_url(char *image_url, int retries,
 			sleep(20);
 		}
 		res = curl_easy_perform(curl_handle);
+
+		curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response_code);
+		TRACE("Got response code %ld", response_code);
 
 		/* if size cannot be determined, exit because no resume is possible */
 		if (curl_easy_getinfo(curl_handle,
