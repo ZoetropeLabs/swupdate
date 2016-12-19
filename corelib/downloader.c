@@ -241,7 +241,7 @@ RECOVERY_STATUS download_from_url(char *image_url, int retries,
 		}
 		res = curl_easy_perform(curl_handle);
 
-		curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response_code);
+		curl_easy_getinfo(curl_handle, CURLINFO_RESPONSE_CODE, &response_code);
 		TRACE("Got response code %ld", response_code);
 
 		/* if size cannot be determined, exit because no resume is possible */
