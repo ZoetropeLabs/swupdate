@@ -221,6 +221,7 @@ RECOVERY_STATUS download_from_url(char *image_url, int retries,
 
 	curl_easy_setopt(curl_handle, CURLOPT_WRITEFUNCTION, write_data);
 	curl_easy_setopt(curl_handle, CURLOPT_WRITEDATA, &fd);
+	curl_easy_setopt(curl_handle, CURLOPT_FAILONERROR, 1L);
 	set_option_common(curl_handle, lowspeed_time, &progress);
 
 	TRACE("Image download started : %s", image_url);
