@@ -46,7 +46,7 @@ static int get_cpiohdr(unsigned char *buf, long *size, long *namesize, long *chk
 		if (print_buf)
 		{
 			snprintf(print_buf, 256, "%s", buf);
-			TRACE(print_buf);
+			TRACE("%s", print_buf);
 			free(print_buf);
 		}
 		return -EINVAL;
