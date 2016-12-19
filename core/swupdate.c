@@ -722,7 +722,7 @@ int main(int argc, char **argv)
 		else
 			exit(1);
 #else
-        ERROR("Downloading from a URL is not supported - recompile with CONFIG_DOWNLOAD")
+        ERROR("Downloading from a URL is not supported - recompile with CONFIG_DOWNLOAD");
         exit(1);
 #endif
 	}
