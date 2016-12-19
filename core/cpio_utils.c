@@ -40,10 +40,12 @@ static int get_cpiohdr(unsigned char *buf, long *size, long *namesize, long *chk
 
 	cpiohdr = (struct new_ascii_header *)buf;
 	if (strncmp(cpiohdr->c_magic, "070702", 6) != 0) {
-		char * print_buf = calloc(size + 1, sizeof(buf[0]));
+		ERROR("CPIO Format not recognized: magic not found\n");
+
+		char * print_buf = calloc(256 + 1, sizeof(buf[0]));
 		if (print_buf)
 		{
-			snprintf(print_buf, size, "%s", buf);
+			snprintf(print_buf, 256, "%s", buf);
 			TRACE(print_buf);
 			free(print_buf);
 		}
